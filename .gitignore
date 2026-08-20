@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.pnpm-store/
+.timeagent/
+.env
+.env.*
+!.env.example
+*.tgz
