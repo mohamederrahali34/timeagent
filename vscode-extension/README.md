@@ -1,7 +1,7 @@
 # TimeAgent for VS Code
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/mohamederrahali34/timeagent/main/vscode-extension/resources/timeagent-logo.png" width="180" alt="TimeAgent logo">
+  <img src="https://raw.githubusercontent.com/timeagent-dev/timeagent/main/vscode-extension/resources/timeagent-logo.png" width="180" alt="TimeAgent logo">
 </p>
 
 Protect, inspect, and undo coding-agent sessions directly from VS Code.

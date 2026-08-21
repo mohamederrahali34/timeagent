@@ -45,7 +45,7 @@ Inspect the completed session, review its diff, and restore the original state:
 TimeAgent is not documented as an npm registry package in this release. Clone the public GitHub repository:
 
 ```sh
-git clone https://github.com/mohamederrahali34/timeagent.git
+git clone https://github.com/timeagent-dev/timeagent.git
 cd timeagent
 npm install
 npm run build

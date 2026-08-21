@@ -65,7 +65,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     if (choice === "Copy Install Command") {
       await vscode.env.clipboard.writeText("npm install -g timeagent");
       void vscode.window.showInformationMessage("Install command copied to the clipboard.");
-    } else if (choice === "Open Documentation") await vscode.env.openExternal(vscode.Uri.parse("https://github.com/mohamederrahali34/timeagent#installation-from-source"));
+    } else if (choice === "Open Documentation") await vscode.env.openExternal(vscode.Uri.parse("https://github.com/timeagent-dev/timeagent#installation-from-source"));
   }
 
   async function showUpgradeRequired(): Promise<void> {
@@ -73,7 +73,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     if (choice === "Copy Upgrade Command") {
       await vscode.env.clipboard.writeText("npm install -g timeagent@latest");
       void vscode.window.showInformationMessage("Upgrade command copied to the clipboard.");
-    } else if (choice === "Open Documentation") await vscode.env.openExternal(vscode.Uri.parse("https://github.com/mohamederrahali34/timeagent"));
+    } else if (choice === "Open Documentation") await vscode.env.openExternal(vscode.Uri.parse("https://github.com/timeagent-dev/timeagent"));
   }
 
   async function showMissingAgent(agent: AgentChoice): Promise<void> {
