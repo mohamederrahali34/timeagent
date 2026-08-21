@@ -14,6 +14,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import type { FileFingerprint, Snapshot } from "./snapshot.js";
+import { readActionsFromCheckpoint } from "./actions.js";
 
 export type SerializedSnapshot = Array<[string, FileFingerprint]>;
 
@@ -177,7 +178,7 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
-export async function prepareCheckpoint(root: string, before: Snapshot, command: string, args: string[]): Promise<void> {
+export async function prepareCheckpoint(root: string, before: Snapshot, command: string, args: string[]): Promise<SessionMetadata> {
   const pending = pendingDirectory(root);
   if (await pathExists(pending)) {
     throw new Error(
@@ -204,6 +205,7 @@ export async function prepareCheckpoint(root: string, before: Snapshot, command:
   };
   await writeJsonAtomic(path.join(pending, "before.json"), [...before]);
   await writeJsonAtomic(path.join(pending, "session.json"), session);
+  return session;
 }
 
 export async function finalizeCheckpoint(root: string, after: Snapshot): Promise<void> {
@@ -227,6 +229,8 @@ export async function finalizeCheckpoint(root: string, after: Snapshot): Promise
     after: [...after],
     completedAt: new Date().toISOString(),
   };
+  const actions = await readActionsFromCheckpoint(pending, session.sessionId);
+  await writeJsonAtomic(path.join(pending, "actions.json"), actions);
   await writeJsonAtomic(path.join(pending, "manifest.json"), manifest);
   await rm(lastDirectory(root), { recursive: true, force: true });
   await rename(pending, lastDirectory(root));

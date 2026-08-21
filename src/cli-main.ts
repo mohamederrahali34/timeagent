@@ -5,14 +5,20 @@ import { runAndTrack } from "./runner.js";
 import { undoLast, type ConfirmUndo, type UndoConfirmation } from "./undo.js";
 import { formatStatus, getStatus } from "./status.js";
 import { formatDiffSummary, formatPatch, getSessionDiff } from "./session-diff.js";
+import { formatActions, getActions } from "./actions.js";
 
-const usage = "Usage: timeagent run <command> [args...]\n       timeagent undo [--yes]\n       timeagent status\n       timeagent diff [--patch]";
+const usage = "Usage: timeagent run [--allow-high-risk] <command> [args...]\n       timeagent undo [--yes]\n       timeagent status\n       timeagent diff [--patch]\n       timeagent actions";
 
-export type RunInvocation = { command: string; args: string[] };
+export type RunInvocation = { command: string; args: string[]; allowHighRisk?: true };
 
 export function parseRunInvocation(argv: string[]): RunInvocation | undefined {
-  if (argv[0] !== "run" || !argv[1]) return undefined;
-  return { command: argv[1], args: argv.slice(2) };
+  if (argv[0] !== "run") return undefined;
+  const allowHighRisk = argv[1] === "--allow-high-risk";
+  const commandIndex = allowHighRisk ? 2 : 1;
+  if (!argv[commandIndex]) return undefined;
+  return allowHighRisk
+    ? { command: argv[commandIndex], args: argv.slice(commandIndex + 1), allowHighRisk: true }
+    : { command: argv[commandIndex], args: argv.slice(commandIndex + 1) };
 }
 
 function printChangeCounts(context: UndoConfirmation): void {
@@ -80,6 +86,15 @@ export async function main(argv: string[]): Promise<number> {
       return 1;
     }
   }
+  if (subcommand === "actions" && command === undefined) {
+    try {
+      console.log(formatActions(await getActions()));
+      return 0;
+    } catch (error) {
+      console.error(`timeagent: ${error instanceof Error ? error.message : String(error)}`);
+      return 1;
+    }
+  }
   const invocation = parseRunInvocation(argv);
   if (!invocation) {
     console.error(usage);
@@ -87,7 +102,7 @@ export async function main(argv: string[]): Promise<number> {
   }
 
   try {
-    const result = await runAndTrack(invocation.command, invocation.args);
+    const result = await runAndTrack(invocation.command, invocation.args, process.cwd(), invocation.allowHighRisk === true);
     console.log(formatSummary(result));
     if (result.signal) console.error(`Command interrupted by signal ${result.signal}.`);
     return result.exitCode;

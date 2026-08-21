@@ -4,7 +4,7 @@ Undo coding-agent changes without losing the work you had before the agent start
 
 ## Experimental software
 
-TimeAgent is an experimental v0.1.0 release. Try it first on disposable or test repositories, keep normal backups and version control, and review `timeagent diff` before relying on an undo. TimeAgent is not a replacement for Git.
+TimeAgent is experimental software. Version 0.2 adds a limited external-action awareness prototype to the existing filesystem checkpoint and undo system. Try it first on disposable or test repositories, keep normal backups and version control, and review `timeagent diff` before relying on an undo. TimeAgent is not a replacement for Git or a security sandbox.
 
 ## The problem
 
@@ -53,16 +53,19 @@ Node.js 20 or newer and Git are required.
 ## Commands
 
 ```text
-timeagent run <command> [args...]
+timeagent run [--allow-high-risk] <command> [args...]
 timeagent status
+timeagent actions
 timeagent diff
 timeagent diff --patch
 timeagent undo
 timeagent undo --yes
 ```
 
-- `run` captures a pre-session checkpoint, runs the child command with inherited terminal input/output, and records created, modified, and deleted files.
-- `status` reports whether the latest checkpoint is active, completed, interrupted, invalid, or absent.
+- `run` captures a pre-session checkpoint, runs the child command with inherited terminal input/output, and records created, modified, and deleted files. It also prepends limited command proxies to the child process's `PATH`.
+- `run --allow-high-risk` is an explicit experimental policy that permits intercepted high- and critical-risk commands. Without it, non-interactive sessions fail closed and interactive sessions ask with a default of No.
+- `status` reports whether the latest checkpoint is active, completed, interrupted, invalid, or absent, plus external-action counts.
+- `actions` displays the read-only action log for the current session.
 - `diff` compares the pre-session state with the recorded post-session state. For interrupted sessions, it compares with the current repository state and displays a warning.
 - `diff --patch` also displays a simple textual patch. Binary files and files larger than 1 MiB are not rendered as text.
 - `undo` restores the pre-session filesystem state. It asks before overwriting changes made after a session or recovering an interrupted session.
@@ -101,7 +104,23 @@ TimeAgent checkpoints local files inside the repository, excluding `.git/` and `
 - ignored files;
 - pre-existing user modifications present before `timeagent run`.
 
-Only the latest session is retained in v0.1.0.
+Only the latest session is retained.
+
+## Experimental external-action awareness
+
+TimeAgent v0.2 creates session-local `PATH` proxies for a small explicit list of package, database, deployment, and infrastructure tools. When a wrapped child process resolves one of these tools through `PATH`, the proxy records its executable name, exact argument array, working directory, category, risk, status, and the fact that TimeAgent cannot reverse it. Medium-risk package-manager actions are allowed and logged. High- and critical-risk actions require interactive approval or the explicit `--allow-high-risk` policy.
+
+The durable log is stored with the checkpoint in `.timeagent/last/actions.json`; while a session is running or after a crash, individual atomic action records remain under `.timeagent/pending/actions/`.
+
+This mechanism is intentionally limited and bypassable. It does not intercept:
+
+- binaries invoked with an absolute or otherwise explicit path;
+- commands after a child replaces or removes TimeAgent's `PATH` entry;
+- shell built-ins, aliases, renamed tools, or tools not in the explicit proxy list;
+- native child-process execution that bypasses command lookup;
+- API calls or remote side effects that do not use an intercepted executable.
+
+Detection is not containment. A child process already has the same operating-system permissions as the user, and remote actions are not automatically reversible. The action log must not be treated as complete audit evidence.
 
 ## What TimeAgent does not protect
 
@@ -116,7 +135,7 @@ TimeAgent does not roll back effects outside the repository filesystem, includin
 - secrets changed outside the repository;
 - arbitrary operating-system state outside the repository.
 
-TimeAgent v0.1.0 also does not preserve empty directories or every advanced filesystem attribute such as ACLs, ownership, and timestamps. It primarily restores file contents, file presence, basic modes, and symbolic-link targets.
+TimeAgent does not preserve every advanced filesystem attribute such as ACLs, ownership, and timestamps. It primarily restores file contents, file and directory presence, basic modes, and symbolic-link targets.
 
 An interrupted restoration can also leave a partially restored working tree if the operating system fails during file replacement. The checkpoint is retained unless restoration completes successfully.
 
@@ -132,4 +151,4 @@ npm run build
 npm test
 ```
 
-The test suite includes real child processes, separate CLI invocations, crash-recovery scenarios, PowerShell argument handling on Windows, and conditional platform-specific signal tests. This release has been exercised on Windows; platform-specific tests are skipped when the host cannot support them. A public CI matrix has not yet been configured.
+The test suite includes real nested child processes, external-action policy checks, separate CLI invocations, crash-recovery scenarios, PowerShell argument handling on Windows, and conditional platform-specific signal tests. Platform-specific tests are skipped when the host cannot support them. A public CI matrix has not yet been configured.

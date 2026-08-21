@@ -3,6 +3,7 @@ import { diffSnapshots, type FileChanges } from "./diff.js";
 import { findGitRoot } from "./git.js";
 import { captureSnapshot } from "./snapshot.js";
 import { finalizeCheckpoint, prepareCheckpoint } from "./checkpoint.js";
+import { prepareInterception } from "./interception.js";
 
 export type RunResult = FileChanges & {
   exitCode: number;
@@ -16,13 +17,14 @@ function exitCodeForSignal(signal: NodeJS.Signals): number {
   return signal === "SIGINT" ? 130 : 143;
 }
 
-export function executeCommand(command: string, args: readonly string[], cwd: string): Promise<{ exitCode: number; signal: NodeJS.Signals | null }> {
+export function executeCommand(command: string, args: readonly string[], cwd: string, env: NodeJS.ProcessEnv = process.env): Promise<{ exitCode: number; signal: NodeJS.Signals | null }> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, [...args], {
       cwd,
       shell: false,
       stdio: ["inherit", "inherit", "inherit"],
       windowsVerbatimArguments: false,
+      env,
     });
     let forwardedSignal: NodeJS.Signals | null = null;
 
@@ -61,15 +63,16 @@ export function executeCommand(command: string, args: readonly string[], cwd: st
   });
 }
 
-export async function runAndTrack(command: string, args: string[], cwd = process.cwd()): Promise<RunResult> {
+export async function runAndTrack(command: string, args: string[], cwd = process.cwd(), allowHighRisk = false): Promise<RunResult> {
   const gitRoot = await findGitRoot(cwd);
   const before = await captureSnapshot(gitRoot);
-  await prepareCheckpoint(gitRoot, before, command, args);
+  const session = await prepareCheckpoint(gitRoot, before, command, args);
+  const env = await prepareInterception(gitRoot, session, allowHighRisk);
 
   let outcome: { exitCode: number; signal: NodeJS.Signals | null } | undefined;
   let executionError: unknown;
   try {
-    outcome = await executeCommand(command, args, cwd);
+    outcome = await executeCommand(command, args, cwd, env);
   } catch (error) {
     executionError = error;
   }
