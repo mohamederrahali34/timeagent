@@ -1,9 +1,9 @@
 {
-  "name": "timeagent-vscode",
-  "displayName": "TimeAgent",
+  "name": "timeagent-agent-safety",
+  "displayName": "TimeAgent for VS Code",
   "version": "0.2.3",
   "description": "Protect, inspect, and undo AI coding-agent sessions.",
-  "publisher": "mohamederrahali34",
+  "publisher": "timeagent",
   "license": "Apache-2.0",
   "icon": "resources/timeagent-logo.png",
   "repository": {
