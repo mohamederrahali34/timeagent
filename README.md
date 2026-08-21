@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./assets/timeagent-logo.png" width="180" alt="TimeAgent logo">
+</p>
+
 # TimeAgent
 
 Undo coding-agent changes without losing the work you had before the agent started.
