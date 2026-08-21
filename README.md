@@ -26,6 +26,16 @@ timeagent run claude
 
 TimeAgent runs an arbitrary child command. These examples do not imply an official integration or partnership with OpenAI, Anthropic, Codex, or Claude.
 
+## Demo
+
+Run a coding-agent session while preserving the repository's pre-session state:
+
+![TimeAgent running a Codex session and reporting the created file](docs/images/timeagent-run-codex.png)
+
+Inspect the completed session, review its diff, and restore the original state:
+
+![TimeAgent status, diff, and successful undo](docs/images/timeagent-diff-undo.png)
+
 ## Installation from source
 
 TimeAgent is not documented as an npm registry package in this release. Clone the public GitHub repository:
