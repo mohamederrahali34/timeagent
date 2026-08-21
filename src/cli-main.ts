@@ -6,8 +6,10 @@ import { undoLast, type ConfirmUndo, type UndoConfirmation } from "./undo.js";
 import { formatStatus, getStatus } from "./status.js";
 import { formatDiffSummary, formatPatch, getSessionDiff } from "./session-diff.js";
 import { formatActions, getActions } from "./actions.js";
+import { getActionsJson, getDiffFileJson, getDiffJson, getStatusJson } from "./json-api.js";
 
-const usage = "Usage: timeagent run [--allow-high-risk] <command> [args...]\n       timeagent undo [--yes]\n       timeagent status\n       timeagent diff [--patch]\n       timeagent actions";
+export const cliVersion = "0.2.1";
+const usage = "Usage: timeagent run [--allow-high-risk] <command> [args...]\n       timeagent undo [--yes]\n       timeagent status [--json]\n       timeagent diff [--patch|--json]\n       timeagent diff-file <relative-path> --json\n       timeagent actions [--json]\n       timeagent --version";
 
 export type RunInvocation = { command: string; args: string[]; allowHighRisk?: true };
 
@@ -53,6 +55,10 @@ const confirmUndo: ConfirmUndo = async (_changes, context) => {
 
 export async function main(argv: string[]): Promise<number> {
   const [subcommand, command, ...extra] = argv;
+  if (subcommand === "--version" && command === undefined) {
+    console.log(cliVersion);
+    return 0;
+  }
   if (subcommand === "undo" && (command === undefined || command === "--yes") && extra.length === 0) {
     try {
       await undoLast(process.cwd(), confirmUndo, command === "--yes");
@@ -63,17 +69,21 @@ export async function main(argv: string[]): Promise<number> {
       return 1;
     }
   }
-  if (subcommand === "status" && command === undefined) {
+  if (subcommand === "status" && (command === undefined || command === "--json") && extra.length === 0) {
     try {
-      console.log(formatStatus(await getStatus()));
+      console.log(command === "--json" ? JSON.stringify(await getStatusJson()) : formatStatus(await getStatus()));
       return 0;
     } catch (error) {
       console.error(`timeagent: ${error instanceof Error ? error.message : String(error)}`);
       return 1;
     }
   }
-  if (subcommand === "diff" && (command === undefined || command === "--patch") && extra.length === 0) {
+  if (subcommand === "diff" && (command === undefined || command === "--patch" || command === "--json") && extra.length === 0) {
     try {
+      if (command === "--json") {
+        console.log(JSON.stringify(await getDiffJson()));
+        return 0;
+      }
       const report = await getSessionDiff();
       console.log(formatDiffSummary(report));
       if (command === "--patch") {
@@ -86,9 +96,18 @@ export async function main(argv: string[]): Promise<number> {
       return 1;
     }
   }
-  if (subcommand === "actions" && command === undefined) {
+  if (subcommand === "diff-file" && command !== undefined && extra.length === 1 && extra[0] === "--json") {
     try {
-      console.log(formatActions(await getActions()));
+      console.log(JSON.stringify(await getDiffFileJson(command)));
+      return 0;
+    } catch (error) {
+      console.error(`timeagent: ${error instanceof Error ? error.message : String(error)}`);
+      return 1;
+    }
+  }
+  if (subcommand === "actions" && (command === undefined || command === "--json") && extra.length === 0) {
+    try {
+      console.log(command === "--json" ? JSON.stringify(await getActionsJson()) : formatActions(await getActions()));
       return 0;
     } catch (error) {
       console.error(`timeagent: ${error instanceof Error ? error.message : String(error)}`);

@@ -1,0 +1,90 @@
+{
+  "name": "timeagent-vscode",
+  "displayName": "TimeAgent",
+  "version": "0.2.2",
+  "description": "Protect, inspect, and undo AI coding-agent sessions.",
+  "publisher": "mohamederrahali34",
+  "license": "Apache-2.0",
+  "icon": "resources/timeagent-logo.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mohamederrahali34/timeagent.git",
+    "directory": "vscode-extension"
+  },
+  "type": "commonjs",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "codex",
+    "claude",
+    "ai agents",
+    "coding agents",
+    "rollback",
+    "undo",
+    "developer tools"
+  ],
+  "activationEvents": [
+    "onView:timeagent.overview",
+    "onCommand:timeagent.enableProtection",
+    "onCommand:timeagent.disableProtection",
+    "onCommand:timeagent.startSession",
+    "onCommand:timeagent.refreshStatus",
+    "onCommand:timeagent.undoSession",
+    "onCommand:timeagent.reviewChanges",
+    "onCommand:timeagent.openFileDiff",
+    "onCommand:timeagent.viewExternalActions"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "timeagent.enableProtection", "title": "TimeAgent: Enable Protection", "icon": "$(shield)" },
+      { "command": "timeagent.disableProtection", "title": "TimeAgent: Disable Protection", "icon": "$(shield-x)" },
+      { "command": "timeagent.startSession", "title": "TimeAgent: Start Protected Session", "icon": "$(play)" },
+      { "command": "timeagent.refreshStatus", "title": "TimeAgent: Refresh", "icon": "$(refresh)" },
+      { "command": "timeagent.undoSession", "title": "TimeAgent: Undo Last Session", "icon": "$(discard)" },
+      { "command": "timeagent.reviewChanges", "title": "TimeAgent: Review Changes", "icon": "$(diff)" },
+      { "command": "timeagent.openFileDiff", "title": "TimeAgent: Open File Diff", "icon": "$(diff)" },
+      { "command": "timeagent.viewExternalActions", "title": "TimeAgent: View External Actions", "icon": "$(list-tree)" }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "timeagent",
+          "title": "TimeAgent",
+          "icon": "resources/timeagent-activity.svg"
+        }
+      ]
+    },
+    "views": {
+      "timeagent": [
+        {
+          "id": "timeagent.overview",
+          "name": "TimeAgent"
+        },
+        {
+          "id": "timeagent.changes",
+          "name": "Changes"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        { "command": "timeagent.startSession", "when": "view == timeagent.overview", "group": "navigation@1" },
+        { "command": "timeagent.refreshStatus", "when": "view == timeagent.overview", "group": "navigation@2" }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",
+    "test": "npm run build && node --test dist/**/*.test.js"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "@types/vscode": "^1.95.0",
+    "typescript": "^5.9.2"
+  }
+}

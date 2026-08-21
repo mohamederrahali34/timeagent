@@ -4,19 +4,20 @@ import { inspectCheckpoint, type SessionMetadata } from "./checkpoint.js";
 import { captureSnapshot } from "./snapshot.js";
 import { readActionsFromCheckpoint } from "./actions.js";
 
-type ActionSummary = { total: number; highRisk: number; denied: number };
+export type ActionSummary = { total: number; highRisk: number; critical: number; denied: number };
 
 export type TimeAgentStatus =
   | { kind: "none" }
   | { kind: "invalid"; reason: string }
   | { kind: "active"; session: SessionMetadata; actions: ActionSummary }
   | { kind: "interrupted"; session: SessionMetadata; changes: FileChanges; actions: ActionSummary }
-  | { kind: "completed"; session: SessionMetadata; changes: FileChanges; actions: ActionSummary };
+  | { kind: "completed"; session: SessionMetadata; completedAt?: string; changes: FileChanges; actions: ActionSummary };
 
 function summarizeActions(actions: Awaited<ReturnType<typeof readActionsFromCheckpoint>>): ActionSummary {
   return {
     total: actions.length,
     highRisk: actions.filter((action) => action.risk === "high" || action.risk === "critical").length,
+    critical: actions.filter((action) => action.risk === "critical").length,
     denied: actions.filter((action) => action.status === "denied").length,
   };
 }
@@ -33,7 +34,7 @@ export async function getStatus(cwd = process.cwd()): Promise<TimeAgentStatus> {
     return { kind: "interrupted", session: checkpoint.session, changes: diffSnapshots(checkpoint.before, current), actions };
   }
   const actions = summarizeActions(await readActionsFromCheckpoint(checkpoint.directory, checkpoint.manifest.session.sessionId));
-  return { kind: "completed", session: checkpoint.manifest.session, changes: diffSnapshots(checkpoint.before, checkpoint.after), actions };
+  return { kind: "completed", session: checkpoint.manifest.session, completedAt: checkpoint.manifest.completedAt, changes: diffSnapshots(checkpoint.before, checkpoint.after), actions };
 }
 
 function commandLabel(session: SessionMetadata): string {

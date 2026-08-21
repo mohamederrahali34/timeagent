@@ -1,6 +1,6 @@
 {
   "name": "timeagent",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Undo coding-agent file changes without losing pre-existing local work.",
   "type": "module",
   "bin": {

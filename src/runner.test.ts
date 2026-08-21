@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
-import { runAndTrack } from "./runner.js";
+import { commandLaunchError, runAndTrack } from "./runner.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -31,6 +31,14 @@ test("tracks a session without altering a pre-existing change", async () => {
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("formats ENOENT clearly and preserves unexpected launch diagnostics", () => {
+  const missing = commandLaunchError("missing-agent", Object.assign(new Error("spawn missing-agent ENOENT"), { code: "ENOENT" }));
+  assert.equal(missing.message, 'failed to start "missing-agent": command not found');
+  assert.equal((missing as NodeJS.ErrnoException).code, "ENOENT");
+  const denied = Object.assign(new Error("spawn failed: access denied"), { code: "EACCES" });
+  assert.equal(commandLaunchError("agent", denied), denied);
 });
 
 test("rejects a directory outside a Git repository", async () => {

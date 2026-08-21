@@ -59,8 +59,12 @@ Node.js 20 or newer and Git are required.
 ```text
 timeagent run [--allow-high-risk] <command> [args...]
 timeagent status
+timeagent status --json
 timeagent actions
+timeagent actions --json
 timeagent diff
+timeagent diff --json
+timeagent diff-file <repository-relative-path> --json
 timeagent diff --patch
 timeagent undo
 timeagent undo --yes
@@ -70,7 +74,9 @@ timeagent undo --yes
 - `run --allow-high-risk` is an explicit experimental policy that permits intercepted high- and critical-risk commands. Without it, non-interactive sessions fail closed and interactive sessions ask with a default of No.
 - `status` reports whether the latest checkpoint is active, completed, interrupted, invalid, or absent, plus external-action counts.
 - `actions` displays the read-only action log for the current session.
+- `status --json`, `diff --json`, `diff-file <path> --json`, and `actions --json` expose the stable, versioned `schemaVersion: 1` interface used by integrations. Successful JSON commands write JSON only to stdout; errors are written to stderr.
 - `diff` compares the pre-session state with the recorded post-session state. For interrupted sessions, it compares with the current repository state and displays a warning.
+- `diff-file <path> --json` returns the validated before/after text for one file listed by the current session diff. It rejects absolute, traversal, internal-storage, unchanged, cross-repository, and symlink/junction escape paths. Binary contents are withheld, and text larger than 1 MiB is reported as unavailable rather than loaded into memory.
 - `diff --patch` also displays a simple textual patch. Binary files and files larger than 1 MiB are not rendered as text.
 - `undo` restores the pre-session filesystem state. It asks before overwriting changes made after a session or recovering an interrupted session.
 - `undo --yes` explicitly confirms that restoration for non-interactive or scripted use.

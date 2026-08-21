@@ -236,6 +236,13 @@ export async function finalizeCheckpoint(root: string, after: Snapshot): Promise
   await rename(pending, lastDirectory(root));
 }
 
+export async function discardPendingCheckpoint(root: string, expectedSessionId: string): Promise<void> {
+  const pending = pendingDirectory(root);
+  const session = parseSession(JSON.parse(await readFile(path.join(pending, "session.json"), "utf8")));
+  if (session.sessionId !== expectedSessionId) throw new Error("Pending checkpoint changed before command startup cleanup.");
+  await rm(pending, { recursive: true, force: true });
+}
+
 async function inspectCompleted(root: string): Promise<AvailableCheckpoint> {
   const directory = lastDirectory(root);
   try {

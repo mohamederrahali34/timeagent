@@ -1,0 +1,9 @@
+.vscode/**
+.gitignore
+src/**
+**/*.test.*
+dist/test-fixtures.*
+dist/**/*.map
+tsconfig.json
+node_modules/.cache/**
+*.vsix

@@ -84,7 +84,7 @@ export function formatDiffSummary(report: SessionDiff): string {
   return lines.join("\n");
 }
 
-type ContentResult = { kind: "text"; text: string } | { kind: "binary" } | { kind: "large" } | { kind: "missing" };
+export type ContentResult = { kind: "text"; text: string } | { kind: "binary" } | { kind: "large" } | { kind: "missing" };
 
 async function loadContent(file: string): Promise<ContentResult> {
   try {
@@ -127,6 +127,26 @@ async function sideContent(report: SessionDiff, relativePath: string, side: "bef
     ? path.join(report.checkpoint.directory, "after-files", ...relativePath.split("/"))
     : path.join(report.root, ...relativePath.split("/"));
   return loadContent(source);
+}
+
+export async function getDiffFileSides(report: SessionDiff, relativePath: string): Promise<{
+  before: ContentResult;
+  after: ContentResult;
+  beforeExists: boolean;
+  afterExists: boolean;
+}> {
+  const changed = [...report.changes.created, ...report.changes.modified, ...report.changes.deleted].includes(relativePath);
+  if (!changed) throw new Error(`File is not part of the session diff: ${relativePath}`);
+  const [before, after] = await Promise.all([sideContent(report, relativePath, "before"), sideContent(report, relativePath, "after")]);
+  return { before, after, beforeExists: report.checkpoint.before.has(relativePath), afterExists: report.after.has(relativePath) };
+}
+
+export async function inspectDiffFile(report: SessionDiff, relativePath: string): Promise<{ binary: boolean; tooLarge: boolean }> {
+  const { before, after } = await getDiffFileSides(report, relativePath);
+  return {
+    binary: before.kind === "binary" || after.kind === "binary",
+    tooLarge: before.kind === "large" || after.kind === "large",
+  };
 }
 
 function patchLines(relativePath: string, before: string, after: string): string {

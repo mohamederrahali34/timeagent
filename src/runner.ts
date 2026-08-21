@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { diffSnapshots, type FileChanges } from "./diff.js";
 import { findGitRoot } from "./git.js";
 import { captureSnapshot } from "./snapshot.js";
-import { finalizeCheckpoint, prepareCheckpoint } from "./checkpoint.js";
+import { discardPendingCheckpoint, finalizeCheckpoint, prepareCheckpoint } from "./checkpoint.js";
 import { prepareInterception } from "./interception.js";
 
 export type RunResult = FileChanges & {
@@ -63,6 +63,13 @@ export function executeCommand(command: string, args: readonly string[], cwd: st
   });
 }
 
+export function commandLaunchError(command: string, error: unknown): Error {
+  if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
+    return Object.assign(new Error(`failed to start "${command}": command not found`), { code: "ENOENT" });
+  }
+  return error instanceof Error ? error : new Error(String(error));
+}
+
 export async function runAndTrack(command: string, args: string[], cwd = process.cwd(), allowHighRisk = false): Promise<RunResult> {
   const gitRoot = await findGitRoot(cwd);
   const before = await captureSnapshot(gitRoot);
@@ -74,7 +81,12 @@ export async function runAndTrack(command: string, args: string[], cwd = process
   try {
     outcome = await executeCommand(command, args, cwd, env);
   } catch (error) {
-    executionError = error;
+    executionError = commandLaunchError(command, error);
+  }
+
+  if ((executionError as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
+    await discardPendingCheckpoint(gitRoot, session.sessionId);
+    throw executionError;
   }
 
   const after = await captureSnapshot(gitRoot);
