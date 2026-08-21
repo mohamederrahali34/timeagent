@@ -6,10 +6,10 @@ import {
   mkdir,
   open,
   readFile,
-  readdir,
   realpath,
   rename,
   rm,
+  rmdir,
   symlink,
 } from "node:fs/promises";
 import path from "node:path";
@@ -18,7 +18,7 @@ import type { FileFingerprint, Snapshot } from "./snapshot.js";
 export type SerializedSnapshot = Array<[string, FileFingerprint]>;
 
 export type SessionMetadata = {
-  version: 2;
+  version: 2 | 3;
   sessionId: string;
   repositoryRoot: string;
   command: string;
@@ -28,7 +28,7 @@ export type SessionMetadata = {
 };
 
 export type CheckpointManifest = {
-  version: 2;
+  version: 2 | 3;
   session: SessionMetadata;
   before: SerializedSnapshot;
   after: SerializedSnapshot;
@@ -101,7 +101,7 @@ function parseSession(value: unknown): SessionMetadata {
   const session = value as Partial<SessionMetadata>;
   if (
     !session ||
-    session.version !== 2 ||
+    (session.version !== 2 && session.version !== 3) ||
     typeof session.sessionId !== "string" ||
     !session.sessionId ||
     typeof session.repositoryRoot !== "string" ||
@@ -131,7 +131,7 @@ function parseSnapshot(root: string, value: unknown): Snapshot {
     if (
       snapshot.has(relativePath) ||
       !rawFingerprint ||
-      (rawFingerprint.kind !== "file" && rawFingerprint.kind !== "symlink") ||
+      (rawFingerprint.kind !== "file" && rawFingerprint.kind !== "symlink" && rawFingerprint.kind !== "directory") ||
       typeof rawFingerprint.hash !== "string" ||
       !/^[a-f0-9]{64}$/.test(rawFingerprint.hash) ||
       !Number.isInteger(rawFingerprint.mode) ||
@@ -145,7 +145,8 @@ function parseSnapshot(root: string, value: unknown): Snapshot {
     const segments = relativePath.split("/");
     for (let index = 1; index < segments.length; index++) {
       const ancestor = segments.slice(0, index).join("/");
-      if (snapshot.has(ancestor)) {
+      const ancestorFingerprint = snapshot.get(ancestor);
+      if (ancestorFingerprint && ancestorFingerprint.kind !== "directory") {
         throw new Error(`Conflicting checkpoint paths: ${ancestor} and ${relativePath}.`);
       }
     }
@@ -193,7 +194,7 @@ export async function prepareCheckpoint(root: string, before: Snapshot, command:
   }
 
   const session: SessionMetadata = {
-    version: 2,
+    version: 3,
     sessionId: randomUUID(),
     repositoryRoot: await realpath(root),
     command,
@@ -220,7 +221,7 @@ export async function finalizeCheckpoint(root: string, after: Snapshot): Promise
     await copyFile(safeProjectPath(root, relativePath), destination);
   }
   const manifest: CheckpointManifest = {
-    version: 2,
+    version: session.version,
     session,
     before: [...before],
     after: [...after],
@@ -235,7 +236,7 @@ async function inspectCompleted(root: string): Promise<AvailableCheckpoint> {
   const directory = lastDirectory(root);
   try {
     const raw = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8")) as Partial<CheckpointManifest>;
-    if (raw.version !== 2) throw new Error("Unsupported manifest version.");
+    if (raw.version !== 2 && raw.version !== 3) throw new Error("Unsupported manifest version.");
     const session = parseSession(raw.session);
     const canonicalRoot = await realpath(root);
     if (!sameRepository(session.repositoryRoot, canonicalRoot)) {
@@ -275,27 +276,81 @@ export async function inspectCheckpoint(root: string): Promise<AvailableCheckpoi
   return { kind: "none" };
 }
 
-export async function restoreCheckpoint(root: string, checkpoint: Extract<AvailableCheckpoint, { kind: "completed" | "pending" }>): Promise<void> {
+function sameFingerprint(left: FileFingerprint | undefined, right: FileFingerprint): boolean {
+  return Boolean(left && left.kind === right.kind && left.hash === right.hash && left.mode === right.mode);
+}
+
+function isInside(candidate: string, directory: string): boolean {
+  const normalize = (value: string) => {
+    const resolved = path.resolve(value);
+    return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+  };
+  const normalizedCandidate = normalize(candidate);
+  const normalizedDirectory = normalize(directory);
+  return normalizedCandidate === normalizedDirectory || normalizedCandidate.startsWith(`${normalizedDirectory}${path.sep}`);
+}
+
+export async function restoreCheckpoint(
+  root: string,
+  checkpoint: Extract<AvailableCheckpoint, { kind: "completed" | "pending" }>,
+  current: Snapshot,
+  cwd: string,
+): Promise<void> {
   await validateBackups(checkpoint.directory, checkpoint.before);
-  const entries = await readdir(root, { withFileTypes: true });
-  for (const entry of entries) {
-    const rootEntryName = process.platform === "win32" ? entry.name.toLowerCase() : entry.name;
-    if (rootEntryName === ".git" || rootEntryName === ".timeagent") continue;
-    await rm(path.join(root, entry.name), { recursive: true, force: true });
+
+  const session = checkpoint.kind === "completed" ? checkpoint.manifest.session : checkpoint.session;
+  const directoriesToRemove = session.version >= 3
+    ? [...current]
+      .filter(([relativePath, fingerprint]) => fingerprint.kind === "directory" && checkpoint.before.get(relativePath)?.kind !== "directory")
+      .map(([relativePath]) => relativePath)
+      .sort((left, right) => right.split("/").length - left.split("/").length || right.localeCompare(left))
+    : [];
+
+  const canonicalCwd = await realpath(cwd);
+  let blockedDirectory: string | undefined;
+  for (const relativePath of directoriesToRemove) {
+    const canonicalDirectory = await realpath(safeProjectPath(root, relativePath));
+    if (isInside(canonicalCwd, canonicalDirectory)) {
+      blockedDirectory = relativePath;
+      break;
+    }
+  }
+  if (blockedDirectory) {
+    throw new Error(
+      `Cannot undo while your current working directory is inside a directory that must be removed: ${blockedDirectory}\n\n` +
+      `Change to the repository root and run:\n\n  cd "${root}"\n  timeagent undo`,
+    );
   }
 
-  const restoreEntries = [...checkpoint.before].sort((left, right) => {
-    if (left[1].kind === right[1].kind) return left[0].localeCompare(right[0]);
-    return left[1].kind === "file" ? -1 : 1;
-  });
+  const nonDirectoriesToRemove = [...current]
+    .filter(([relativePath, fingerprint]) => {
+      if (fingerprint.kind === "directory") return false;
+      const previous = checkpoint.before.get(relativePath);
+      return !previous || previous.kind !== fingerprint.kind || (fingerprint.kind === "symlink" && !sameFingerprint(previous, fingerprint));
+    })
+    .map(([relativePath]) => relativePath)
+    .sort((left, right) => right.split("/").length - left.split("/").length || right.localeCompare(left));
+
+  for (const relativePath of nonDirectoriesToRemove) {
+    await rm(safeProjectPath(root, relativePath), { force: true });
+  }
+  for (const relativePath of directoriesToRemove) {
+    await rmdir(safeProjectPath(root, relativePath));
+  }
+
+  const restoreEntries = [...checkpoint.before].sort((left, right) => left[0].split("/").length - right[0].split("/").length || left[0].localeCompare(right[0]));
   for (const [relativePath, fingerprint] of restoreEntries) {
     const destination = safeProjectPath(root, relativePath);
-    await mkdir(path.dirname(destination), { recursive: true });
-    if (fingerprint.kind === "symlink") {
-      await symlink(fingerprint.linkTarget!, destination);
-    } else {
+    if (fingerprint.kind === "directory") {
+      await mkdir(destination, { recursive: true });
+      await chmod(destination, fingerprint.mode);
+    } else if (fingerprint.kind === "file") {
+      await mkdir(path.dirname(destination), { recursive: true });
       await copyFile(checkpointFile(checkpoint.directory, relativePath), destination);
       await chmod(destination, fingerprint.mode);
+    } else if (!sameFingerprint(current.get(relativePath), fingerprint)) {
+      await mkdir(path.dirname(destination), { recursive: true });
+      await symlink(fingerprint.linkTarget!, destination);
     }
   }
   await rm(checkpoint.directory, { recursive: true, force: true });

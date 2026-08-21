@@ -37,5 +37,5 @@ export async function undoLast(cwd = process.cwd(), confirm?: ConfirmUndo, assum
       );
     }
   }
-  await restoreCheckpoint(root, checkpoint);
+  await restoreCheckpoint(root, checkpoint, current, cwd);
 }

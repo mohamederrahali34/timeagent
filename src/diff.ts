@@ -12,18 +12,18 @@ export function diffSnapshots(before: Snapshot, after: Snapshot): FileChanges {
   for (const [file, current] of after) {
     const previous = before.get(file);
     if (!previous) {
-      changes.created.push(file);
+      if (current.kind !== "directory") changes.created.push(file);
     } else if (
       previous.kind !== current.kind ||
       previous.hash !== current.hash ||
       previous.mode !== current.mode
     ) {
-      changes.modified.push(file);
+      if (previous.kind !== "directory" || current.kind !== "directory") changes.modified.push(file);
     }
   }
 
-  for (const file of before.keys()) {
-    if (!after.has(file)) changes.deleted.push(file);
+  for (const [file, previous] of before) {
+    if (!after.has(file) && previous.kind !== "directory") changes.deleted.push(file);
   }
 
   changes.created.sort();
